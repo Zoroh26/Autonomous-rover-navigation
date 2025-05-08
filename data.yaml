@@ -1,5 +1,0 @@
-train: DATASET/train/images
-val: DATASET/valid/images
-
-nc: 1  # Number of classes (only "crater" here)
-names: ["crater"]
