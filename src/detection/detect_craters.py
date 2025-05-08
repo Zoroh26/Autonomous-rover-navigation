@@ -9,6 +9,7 @@ from pathlib import Path
 from src.utils.pathfinder import find_safe_path
 from config import TRAINED_MODEL, DATA_DIR
 
+
 class CraterDetector:
     def __init__(self):
         self.image = None
@@ -37,18 +38,30 @@ class CraterDetector:
             return []
 
     def draw_results(self, crater_boxes, path=None):
-        """Visualize craters and path"""
+        """Visualize craters and path with circular detection and offset safe path"""
         self.image_display = self.image.copy()
-        
-        # Draw craters
+
+        # Draw craters as semi-transparent circles
         for box in crater_boxes:
-            cv2.rectangle(self.image_display, box[:2], box[2:], (0, 255, 0), 2)
-        
+            x1, y1, x2, y2 = box
+            center = ((x1 + x2) // 2, (y1 + y2) // 2)
+
+            width = x2 - x1
+            height = y2 - y1
+            radius = min(width, height) // 2
+            scale_factor = 1.2
+            radius = int(radius * scale_factor)
+            # Draw circle outline
+            cv2.circle(self.image_display, center, radius, (0, 255, 0), 2)
+
         # Draw path if exists
         if path:
+            offset = 5  # Offset to prevent overlap
             for i in range(1, len(path)):
-                cv2.line(self.image_display, path[i-1], path[i], (0, 0, 255), 2)
-        
+                start_point = (path[i-1][0] + offset, path[i-1][1] + offset)
+                end_point = (path[i][0] + offset, path[i][1] + offset)
+                cv2.line(self.image_display, start_point, end_point, (0, 0, 255), 4)  # Thicker red line
+
         # Show with matplotlib for better quality
         plt.figure(figsize=(12, 8))
         plt.imshow(cv2.cvtColor(self.image_display, cv2.COLOR_BGR2RGB))
@@ -60,7 +73,7 @@ class CraterDetector:
         """Main processing pipeline"""
         # Reset points for new image
         self.points = []
-        
+
         # File selection
         file_path = filedialog.askopenfilename(
             initialdir=DATA_DIR,
@@ -74,34 +87,37 @@ class CraterDetector:
         if self.image is None:
             messagebox.showerror("Error", "Could not load image!")
             return
-        
+
         # Detect craters
         image_rgb = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
         crater_boxes = self.detect_craters(image_rgb)
-        
+
         if not crater_boxes:
             messagebox.showwarning("Warning", "No craters detected!")
             return
-        
+
         # Initial display of craters
         self.draw_results(crater_boxes)
-        
+
         # Point selection
         self.image_display = self.image.copy()
         for box in crater_boxes:
-            cv2.rectangle(self.image_display, box[:2], box[2:], (0, 255, 0), 2)
-        
+            x1, y1, x2, y2 = box
+            center = ((x1 + x2) // 2, (y1 + y2) // 2)
+            radius = int(np.sqrt((x2 - x1)**2 + (y2 - y1)**2) / 2)
+            cv2.circle(self.image_display, center, radius, (0, 255, 0), 2)
+
         cv2.namedWindow("Select Start & Destination", cv2.WINDOW_NORMAL)
         cv2.setMouseCallback("Select Start & Destination", self.select_point)
         cv2.imshow("Select Start & Destination", self.image_display)
-        
+
         while True:
             key = cv2.waitKey(1) & 0xFF
             if key == 27 or len(self.points) == 2:  # ESC or 2 points selected
                 break
-        
+
         cv2.destroyAllWindows()
-        
+
         # Pathfinding if 2 points selected
         if len(self.points) == 2:
             path = find_safe_path(
@@ -110,18 +126,20 @@ class CraterDetector:
                 crater_boxes=crater_boxes,
                 image_shape=self.image.shape
             )
-            
+
             if path:
                 self.draw_results(crater_boxes, path)
             else:
                 messagebox.showinfo("Info", "No safe path exists between points")
 
+
 def main():
     root = tk.Tk()
     root.withdraw()
-    
+
     detector = CraterDetector()
     detector.process_image()
+
 
 if __name__ == "__main__":
     main()
